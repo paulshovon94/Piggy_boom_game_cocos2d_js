@@ -1,0 +1,359 @@
+var isTapEnabled = false;
+var canCountScore = false;
+var isLevelCompleted = false;
+var isGameOver = false;
+var scorePoint = 0;
+var scoreLimit = 10;
+var scoreLabel = null;
+var angle = 0;
+var targetScore;
+
+var panelName;
+var testList2d;
+
+//Sand Balls
+//golbal variables
+var size;
+var shapeArray = [];
+var sprite_stone;
+var sprite_stone_physics;
+var startTouchX;
+var startTouchY;
+var endTouchX;
+var endTouchY;
+var swipeTolerance = 10;
+var index_stone;
+var stone_posX_org;
+var stone_posY_org;
+var sprite_target_array = new Array();
+var sprite_target_physics_array = new Array();
+var target_killed = 0;
+var sprite_catapult_rope;
+var touched = false;
+var missed = 0;
+var missed01, missed02, missed03;
+var deviceScaleFloat = 1;
+
+
+var HelloWorldLayer = cc.Layer.extend({
+    sprite: null,
+
+    //constructor
+    ctor: function () {
+        //////////////////////////////
+        // 1. super init first
+        this._super();
+        cc.eventManager.addListener({
+            event: cc.EventListener.TOUCH_ONE_BY_ONE,
+            swallowTouches: true,
+            onTouchBegan: this.onTouchBegan,
+            onTouchMoved: this.onTouchMoved,
+            onTouchEnded: this.onTouchEnded
+        }, this);
+        this.init();
+        return true;
+    },
+    //init function
+    init: function () {
+        this._super();
+        size = cc.winSize;
+        cc.log("width: " + size.width);
+        cc.log("height: " + size.height);
+        //initPhysics called
+        this.initPhysics();
+        //loadpanel function called
+        this.loadTestPanel();
+        this.loadTargets();
+    },
+
+    //loadTestPanel function
+    //set body is not working
+    loadTestPanel: function () {
+        //sprite_bg = StorePanel.createSprite(backgroundImgSrc, backgroundImgKey);
+        sprite_bg = new cc.Sprite(res.Background);
+        sprite_bg.setAnchorPoint(cc.p(0.5, 0.5));
+        sprite_bg.setPosition(cc.p(size.width / 2, size.height / 2));
+        var width_ratio = size.width / sprite_bg.getContentSize().width;
+        var height_ratio = size.height / sprite_bg.getContentSize().height;
+        
+        sprite_bg.setScaleX(width_ratio);
+        sprite_bg.setScaleY(height_ratio);
+        this.addChild(sprite_bg, 0);
+
+        //     sprite_stone = StorePanel.createSprite(stoneImgSrc, stoneImgKey);
+        sprite_stone = new cc.Sprite(res.Bird);
+        sprite_stone.setAnchorPoint(cc.p(0.5, 0.5));
+        stone_posX_org = size.width / 2;
+        stone_posY_org = size.height / 4 - 100 * deviceScaleFloat;
+        sprite_stone.setPosition(cc.p(stone_posX_org, stone_posY_org));
+        sprite_stone.setScale(0.4);
+        //this.addChild(sprite_stone, 1);
+        this.addPhysicsBody(sprite_stone, size.width / 2, size.height / 4 - 100 * deviceScaleFloat, true, res.Bird,"circle", 0.5);
+
+        //var sprite_catapult = StorePanel.createSprite(catapultImgSrc, catapultImgKey);
+        var sprite_catapult = new cc.Sprite(res.Catapult);
+        sprite_catapult.setAnchorPoint(cc.p(0.5, 0.5));
+        var catapult_posX_org = size.width / 2;
+        var catapult_posY_org = size.height / 4 - 140 * deviceScaleFloat;
+        sprite_catapult.setPosition(cc.p(catapult_posX_org, catapult_posY_org));
+        sprite_catapult.setScale(0.7 * deviceScaleFloat);
+        this.addChild(sprite_catapult, 0);
+
+        // sprite_catapult_rope = StorePanel.createSprite(catapultRopeImgSrc, catapultRopeImgKey);
+        sprite_catapult_rope = new cc.Sprite(res.Rope);
+        sprite_catapult_rope.setAnchorPoint(cc.p(0.5, 0.5));
+        catapult_posX_org = size.width / 2;
+        catapult_posY_org = size.height / 4 - 140 * deviceScaleFloat;
+        sprite_catapult_rope.setPosition(cc.p(catapult_posX_org, catapult_posY_org));
+        sprite_catapult_rope.setScale(0.7 * deviceScaleFloat);
+        this.addChild(sprite_catapult_rope, 2);
+
+    },
+
+    //load target function
+    loadTargets: function () {
+
+        var target_num = 5;
+        var posX, posY;
+        for (var i = 0; i < target_num; i++) {
+            sprite_target_array[i] = new cc.Sprite(res.Target);
+            if (i == 0) {
+                posX = size.width / 2 - 200 * deviceScaleFloat;
+                posY = size.height / 2;
+            }
+            else if (i == 1) {
+                posX = size.width / 2 + 200 * deviceScaleFloat;
+                posY = size.height / 2;
+            }
+            else if (i == 2) {
+                posX = size.width / 2 - 200 * deviceScaleFloat;
+                posY = size.height / 2 + 200 * deviceScaleFloat;
+            }
+            else if (i == 3) {
+                posX = size.width / 2 + 200 * deviceScaleFloat;
+                posY = size.height / 2 + 200 * deviceScaleFloat;
+            }
+            else if (i == 4) {
+                posX = size.width / 2;
+                posY = size.height / 2 + 300 * deviceScaleFloat;
+            }
+            sprite_target_array[i].setPosition(cc.p(posX, posY));
+            sprite_target_array[i].setScale(0.5 * deviceScaleFloat);
+            this.addPhysicsBodyForTarget(sprite_target_array[i], posX, posY, true, res.Target, "target", 0.5, i);
+        }
+    },
+    //initPhysics
+    initPhysics: function () {
+        this.space = new cp.Space();
+        this.space.gravity = cp.v(0.0, 0.0);
+    },
+
+    //addPhysicsBody function
+    addPhysicsBody: function(bodySprite,posX,posY,isDynamic,spriteImageSrc,type, scaleFactor, obs_num){
+        sprite_stone_physics= new cc.PhysicsSprite(res.Bird);
+        sprite_stone_physics.setAnchorPoint(cc.p(0.5,0.5));
+        sprite_stone_physics.setScale(scaleFactor * deviceScaleFloat);
+        this.addChild(sprite_stone_physics,1);
+
+
+        var width = bodySprite.getContentSize().width * bodySprite.getScaleX();
+        var height = bodySprite.getContentSize().height * bodySprite.getScaleY();
+
+        if(isDynamic){
+        var body = new cp.Body(1,cp.momentForBox(1,width,height));
+        if(type=="circle"){
+            var body = new cp.Body(1,cp.momentForCircle(1,0,width*0.25,cc.p(0,0)));
+        }
+        }
+        else{
+        var body = new cp.Body(Infinity,Infinity);
+        }
+        body.setPos(cp.v(posX,posY));
+        if(isDynamic){
+        this.space.addBody(body);
+        }
+        
+        //adding shape
+        var shape = new cp.BoxShape(body, width, height);
+        if(type=="circle"){
+            var shape = new cp.CircleShape(body, width*0.25, cc.p(0, 0));
+        }
+        
+
+        shape.setFriction(1);
+        shape.setElasticity(0.5);
+        shape.name=type;
+        //Putting image of the sprite in the shape
+        shape.image=bodySprite; 
+        this.space.addShape(shape);
+        shapeArray.push(shape);
+        sprite_stone_physics.setBody(body);
+       },
+
+    addPhysicsBodyForTarget: function (bodySprite, posX, posY, isDynamic, spriteImageSrc, type, scaleFactor, obs_num) {
+        //sprite_target_array[obs_num] = StorePanel.createPhysicsSprite(spriteImageSrc, spriteImageKey);
+        sprite_target_array[obs_num] = new cc.PhysicsSprite(spriteImageSrc);
+        sprite_target_array[obs_num].setAnchorPoint(cc.p(0.5, 0.5));
+        sprite_target_array[obs_num].setScale(scaleFactor * deviceScaleFloat);
+        this.addChild(sprite_target_array[obs_num], 1);
+
+
+        var width = bodySprite.getContentSize().width * bodySprite.getScaleX();
+        var height = bodySprite.getContentSize().height * bodySprite.getScaleY();
+
+        if (isDynamic) {
+            //  var body = new cp.Body(1,cp.momentForBox(1,width,height));
+            //  if(type=="circle"){
+            var body = new cp.Body(1, cp.momentForCircle(1, 0, width * .5, cc.p(0, 0)));
+            //   }
+        }
+        else {
+            var body = new cp.Body(Infinity, Infinity);
+        }
+        body.setPos(cp.v(posX, posY));
+        if (isDynamic) {
+            this.space.addBody(body);
+        }
+
+        //adding shape
+        //  var shape = new cp.BoxShape(body, width, height);
+        //  if(type=="circle"){
+        var shape = new cp.CircleShape(body, width * 0.5, cc.p(0, 0));
+        //  }
+
+
+        shape.setFriction(1);
+        shape.setElasticity(0.5);
+        //   shape.setCollisionType(0);
+        shape.name = type;
+        //Putting image of the sprite in the shape
+        shape.image = bodySprite;
+
+        shape.tag = obs_num;
+        this.space.addShape(shape);
+        shapeArray.push(shape);
+
+        sprite_target_array[obs_num].setBody(body);
+
+        var sprite_action_jump = cc.JumpTo.create(2, cc.p(sprite_target_array[obs_num].getPositionX(), sprite_target_array[obs_num].getPositionY()), 5, 3);
+        // sprite_target_array[obs_num].runAction(sprite_action_jump);
+
+        var repeat_action = cc.RepeatForever.create(sprite_action_jump);
+        sprite_target_array[obs_num].runAction(repeat_action);
+
+    },
+
+    onTouchBegan: function (touch, event) {
+
+        cc.log("Touch begin");
+        // for(var i=shapeArray.length-1;i>=0;i--){
+        //     if(shapeArray[i].pointQuery(cp.v(touch.getLocation().x,touch.getLocation().y))!=undefined){
+        //     if(shapeArray[i].name=="circle"){
+        //         index_stone = i;
+        //         startTouchX = shapeArray[i].body.p.x;
+        //         startTouchY = shapeArray[i].body.p.y;
+        //       //  sprite_stone_physics.body.applyImpulse(cp.v(100,500), cp.v(10,0));
+        //   //  cc.log("startTouch "+ shapeArray[i].body.p.x +"  "+ shapeArray[i].body.p.y);
+        //   cc.log("startTouch X--"+ startTouchX);
+        //   cc.log("startTouch Y-- "+ startTouchY);
+        //   touched = true;
+
+        //     }
+        //     }
+        // }
+
+        //  sprite_stone_physics.angularVelocity = 3000;
+        //   sprite_stone_physics.body.applyImpulse(cp.v(100,500), cp.v(10,0));
+        return true;
+    },
+
+    onTouchMoved: function (touch, event) {
+
+        cc.log("Touch Moved");
+        // for(var i=shapeArray.length-1;i>=0;i--){
+        //     if(shapeArray[i].pointQuery(cp.v(touch.getLocation().x,touch.getLocation().y))!=undefined){
+        //     if(shapeArray[i].name=="circle"){
+        //         //move the shape
+        //         var stone_width = sprite_stone_physics.getContentSize().width * sprite_stone_physics.getScale();
+        //         if(touch.getLocation().x> stone_width/2 && touch.getLocation().x < size.width - stone_width/2){
+        //             shapeArray[i].body.p.x = touch.getLocation().x;
+        //         }
+        //         if(touch.getLocation().y> (sprite_stone_physics.getContentSize().height * sprite_stone_physics.getScale())/2 && touch.getLocation().y < shapeArray[i].body.p.y){
+        //              shapeArray[i].body.p.y = touch.getLocation().y;
+
+        //         }
+
+        //         //srew the rope
+        //     //    var nodeAction = new cc.SkewBy( 0, 2, 0 );
+        //     //    sprite_catapult_rope.runAction( nodeAction );
+
+
+
+
+        //     }
+        //     }
+        // }
+
+    },
+
+    onTouchEnded: function (touch, event) {
+
+        cc.log("Touch end");
+        //  //   for(var i=shapeArray.length-1;i>=0;i--){
+        //     //    if(shapeArray[i].pointQuery(cp.v(touch.getLocation().x,touch.getLocation().y))!=undefined){
+        //     //    if(shapeArray[i].name=="circle"){
+        //          //   endTouchX = shapeArray[index_stone].body.p.x;
+        //          //   endTouchY = shapeArray[index_stone].body.p.y;
+        //             if(touched==true){
+        //             endTouchX = touch.getLocation().x;
+        //             endTouchY = touch.getLocation().y;
+
+        //             //  sprite_stone_physics.body.applyImpulse(cp.v(100,500), cp.v(10,0));
+        //             cc.log("endTouchX--"+ endTouchX);
+        //             cc.log("endTouchY--"+ endTouchY);
+
+        //             var distanceX = startTouchX - endTouchX;
+        //             var distanceY = startTouchY - endTouchY;
+
+
+        //             cc.log("distanceX  "+ distanceX);
+        //             cc.log("distanceY  "+ distanceY);
+
+        //             if(distanceY>=20){
+        //                 sprite_stone_physics.body.applyImpulse(cp.v(distanceX * 9,distanceY * 9), cp.v(0,0));
+        //             }
+        //             else{
+        //                shapeArray[index_stone].body.p.x = stone_posX_org;                             
+        //                shapeArray[index_stone].body.p.y = stone_posY_org;
+        //             }
+
+        //             touched = false;
+
+        //             }
+
+        //             sprite_stone_physics.setPosition(cp.v(stone_posX_org,stone_posY_org));
+
+
+
+        //     //    }
+        //     //    }
+        //  //   }
+
+
+        //  //   this.swipeDirection();
+
+    },
+
+});
+
+
+
+
+var HelloWorldScene = cc.Scene.extend({
+    onEnter: function () {
+        this._super();
+        var layer = new HelloWorldLayer();
+        this.addChild(layer);
+    }
+});
+
